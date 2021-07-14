@@ -13,6 +13,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.github.bleszerd.netflixclone.model.CategoryModel;
 import com.github.bleszerd.netflixclone.model.MovieModel;
+import com.github.bleszerd.netflixclone.util.JsonDownloadTask;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -50,6 +51,8 @@ public class MainActivity extends AppCompatActivity {
         mainAdapter = new MainAdapter(categories);
         rv.setAdapter(mainAdapter);
         rv.setLayoutManager(new LinearLayoutManager(this, RecyclerView.VERTICAL, false));
+
+        new JsonDownloadTask(this).execute("https://tiagoaguiar.co/api/netflix/home");
     }
 
     private static class CategoryHolder extends RecyclerView.ViewHolder {
