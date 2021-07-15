@@ -1,8 +1,11 @@
 package com.github.bleszerd.netflixclone;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Adapter;
+import android.widget.AdapterView;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -13,14 +16,15 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.github.bleszerd.netflixclone.model.CategoryModel;
 import com.github.bleszerd.netflixclone.model.MovieModel;
-import com.github.bleszerd.netflixclone.util.JsonDownloadTask;
+import com.github.bleszerd.netflixclone.util.CategoryTask;
+import com.github.bleszerd.netflixclone.util.ImageTask;
 
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements CategoryTask.CategoryLoader {
 
     private MainAdapter mainAdapter;
 
@@ -38,7 +42,7 @@ public class MainActivity extends AppCompatActivity {
             CategoryModel category = new CategoryModel();
             category.setName("Cat " + j);
 
-            for (int i = 0; i < 30; i++){
+            for (int i = 0; i < 30; i++) {
                 MovieModel movie = new MovieModel();
 //                movie.setCoverUrl(R.drawable.movie);
                 movies.add(movie);
@@ -52,7 +56,14 @@ public class MainActivity extends AppCompatActivity {
         rv.setAdapter(mainAdapter);
         rv.setLayoutManager(new LinearLayoutManager(this, RecyclerView.VERTICAL, false));
 
-        new JsonDownloadTask(this).execute("https://tiagoaguiar.co/api/netflix/home");
+        CategoryTask categoryTask = new CategoryTask(this);
+        categoryTask.setCategoryLoader(this);
+        categoryTask.execute("https://tiagoaguiar.co/api/netflix/home");
+    }
+
+    @Override
+    public void onResult(List<CategoryModel> categories) {
+        mainAdapter.setCategories(categories);
     }
 
     private static class CategoryHolder extends RecyclerView.ViewHolder {
@@ -72,15 +83,18 @@ public class MainActivity extends AppCompatActivity {
 
         ImageView imgViewCover;
 
-        public MovieHolder(@NonNull @org.jetbrains.annotations.NotNull View itemView) {
+        public MovieHolder(@NonNull @org.jetbrains.annotations.NotNull View itemView, final OnItemClickListener onItemClickListener) {
             super(itemView);
             imgViewCover = itemView.findViewById(R.id.image_view_cover);
+            itemView.setOnClickListener(v -> {
+                onItemClickListener.onClick(getAdapterPosition());
+            });
         }
     }
 
     private class MainAdapter extends RecyclerView.Adapter<CategoryHolder> {
 
-        private final List<CategoryModel> categories;
+        private List<CategoryModel> categories;
 
         private MainAdapter(List<CategoryModel> categories) {
             this.categories = categories;
@@ -92,6 +106,7 @@ public class MainActivity extends AppCompatActivity {
         public CategoryHolder onCreateViewHolder(@NonNull @NotNull ViewGroup parent, int viewType) {
             return new CategoryHolder(getLayoutInflater().inflate(R.layout.category_item, parent, false));
         }
+
         @Override
         public void onBindViewHolder(@NonNull @NotNull MainActivity.CategoryHolder holder, int position) {
             CategoryModel category = categories.get(position);
@@ -104,9 +119,15 @@ public class MainActivity extends AppCompatActivity {
         public int getItemCount() {
             return categories.size();
         }
+
+        void setCategories(List<CategoryModel> categories) {
+            this.categories.clear();
+            this.categories.addAll(categories);
+            mainAdapter.notifyDataSetChanged();
+        }
     }
 
-    private class MovieAdapter extends RecyclerView.Adapter<MovieHolder> {
+    private class MovieAdapter extends RecyclerView.Adapter<MovieHolder> implements OnItemClickListener{
 
         private final List<MovieModel> movies;
 
@@ -118,17 +139,30 @@ public class MainActivity extends AppCompatActivity {
         @NotNull
         @Override
         public MovieHolder onCreateViewHolder(@NonNull @NotNull ViewGroup parent, int viewType) {
-            return new MovieHolder(getLayoutInflater().inflate(R.layout.movie_item, parent, false));
+            View view = getLayoutInflater().inflate(R.layout.movie_item, parent, false);
+            return new MovieHolder(view, this);
         }
+
         @Override
         public void onBindViewHolder(@NonNull @NotNull MainActivity.MovieHolder holder, int position) {
             MovieModel movie = movies.get(position);
-//            holder.imgViewCover.setImageResource(movie.getCoverUrl());
+            new ImageTask(holder.imgViewCover).execute(movie.getCoverUrl());
         }
 
         @Override
         public int getItemCount() {
             return movies.size();
         }
+
+        @Override
+        public void onClick(int position) {
+            Intent intent = new Intent(MainActivity.this, MovieActivity.class);
+            intent.putExtra("id", movies.get(position).getId());
+            startActivity(intent);
+        }
+    }
+
+    interface  OnItemClickListener{
+        void onClick(int position);
     }
 }

@@ -2,9 +2,7 @@ package com.github.bleszerd.netflixclone.util;
 
 import android.app.ProgressDialog;
 import android.content.Context;
-import android.graphics.Movie;
 import android.os.AsyncTask;
-import android.util.Log;
 
 import com.github.bleszerd.netflixclone.model.CategoryModel;
 import com.github.bleszerd.netflixclone.model.MovieModel;
@@ -17,10 +15,8 @@ import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.MalformedURLException;
+import java.lang.ref.WeakReference;
 import java.net.URL;
-import java.net.URLClassLoader;
-import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -33,19 +29,26 @@ import javax.net.ssl.HttpsURLConnection;
  *
  * @author alive2k@programmer.net
  */
-public class JsonDownloadTask extends AsyncTask<String, Void, List<CategoryModel>> {
+public class CategoryTask extends AsyncTask<String, Void, List<CategoryModel>> {
 
-    private final Context context;
-    ProgressDialog dialog;
+    private final WeakReference<Context> contextWeak;
+    private ProgressDialog dialog;
+    private CategoryLoader categoryLoader;
 
-    public JsonDownloadTask(Context context) {
-        this.context = context;
+    public CategoryTask(Context context) {
+        this.contextWeak = new WeakReference<>(context);
+    }
+
+    public void setCategoryLoader(CategoryLoader categoryLoader) {
+        this.categoryLoader = categoryLoader;
     }
 
     @Override
     protected void onPreExecute() {
         super.onPreExecute();
-        dialog = ProgressDialog.show(context, "Loading", "", true);
+
+        if (contextWeak != null)
+            dialog = ProgressDialog.show(contextWeak.get(), "Loading", "", true);
     }
 
     @Override
@@ -60,12 +63,11 @@ public class JsonDownloadTask extends AsyncTask<String, Void, List<CategoryModel
             urlConnection.setConnectTimeout(2000);
 
             int response = urlConnection.getResponseCode();
-            if(response >= 400){
+            if (response >= 400) {
                 throw new IOException("Connection error");
             }
 
-            InputStream inputStream = urlConnection.getInputStream();
-
+//            InputStream inputStream = urlConnection.getInputStream();
             BufferedInputStream in = new BufferedInputStream(urlConnection.getInputStream());
 
             String jsonAsString = toString(in);
@@ -74,11 +76,7 @@ public class JsonDownloadTask extends AsyncTask<String, Void, List<CategoryModel
             in.close();
             return categories;
 
-        } catch (MalformedURLException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (JSONException e) {
+        } catch (IOException | JSONException e) {
             e.printStackTrace();
         }
 
@@ -100,9 +98,11 @@ public class JsonDownloadTask extends AsyncTask<String, Void, List<CategoryModel
                 JSONObject movie = movieArray.getJSONObject(j);
 
                 String coverUrl = movie.getString("cover_url");
+                int id = movie.getInt("id");
 
                 MovieModel movieObj = new MovieModel();
                 movieObj.setCoverUrl(coverUrl);
+                movieObj.setId(id);
 
                 movies.add(movieObj);
             }
@@ -113,7 +113,7 @@ public class JsonDownloadTask extends AsyncTask<String, Void, List<CategoryModel
 
             categories.add(categoryObj);
         }
-        
+
         return categories;
     }
 
@@ -121,16 +121,24 @@ public class JsonDownloadTask extends AsyncTask<String, Void, List<CategoryModel
     protected void onPostExecute(List<CategoryModel> categoryModels) {
         super.onPostExecute(categoryModels);
         dialog.dismiss();
+
+        if (categoryLoader != null) {
+            categoryLoader.onResult(categoryModels);
+        }
     }
 
     private String toString(InputStream is) throws IOException {
         byte[] bytes = new byte[1024];
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         int read;
-        while ((read = is.read(bytes)) > 0){
+        while ((read = is.read(bytes)) > 0) {
             baos.write(bytes, 0, read);
         }
 
         return new String(baos.toByteArray());
+    }
+
+    public interface CategoryLoader {
+        void onResult(List<CategoryModel> categories);
     }
 }

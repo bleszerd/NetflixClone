@@ -1,13 +1,18 @@
 package com.github.bleszerd.netflixclone;
 
+import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.LayerDrawable;
+import android.media.Image;
+import android.os.AsyncTask;
 import android.os.Bundle;
+import android.util.Log;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.GridLayout;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -16,19 +21,24 @@ import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.github.bleszerd.netflixclone.model.MovieDetailModel;
 import com.github.bleszerd.netflixclone.model.MovieModel;
+import com.github.bleszerd.netflixclone.util.ImageTask;
+import com.github.bleszerd.netflixclone.util.MovieDetailTask;
 
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class MovieActivity extends AppCompatActivity {
+public class MovieActivity extends AppCompatActivity implements MovieDetailTask.MovieDetailLoader {
 
     private TextView txtTitle;
     private TextView txtDesc;
     private TextView txtCast;
     private RecyclerView recyclerView;
+    private MovieAdapter movieAdapter;
+    private ImageView imgCover;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,32 +63,52 @@ public class MovieActivity extends AppCompatActivity {
         if (drawable != null) {
             Drawable movieCover = ContextCompat.getDrawable(this, R.drawable.movie_4);
             drawable.setDrawableByLayerId(R.id.cover_drawable, movieCover);
-            ((ImageView) findViewById(R.id.image_view_cover)).setImageDrawable(drawable);
+//            ((ImageView) findViewById(R.id.image_view_cover)).setImageDrawable(drawable);
         }
-
-        txtTitle.setText("Batman Begins");
-        txtDesc.setText("superhero film based on the Marvel Comics superhero team the Avengers. ... In the film, the Avengers and the Guardians of the Galaxy attempt to prevent Thanos from collecting the six all-powerful Infinity Stones as part of his quest to kill half of all life in the universe.");
-        txtCast.setText(getString(R.string.cast, new String[]{"Christian Bale," +
-                "Michael Caine," +
-                "Liam Neeson," +
-                "Katie Holmes," +
-                "Gary Oldman," +
-                "Cillian Murphy," +
-                "Tom Wilkinson," +
-                "Rutger Hauer," +
-                "Ken Watanabe," +
-                "Morgan Freeman" }));
 
         List<MovieModel> movies = new ArrayList<>();
-        for (int i = 0; i < 30; i++) {
-            MovieModel movie = new MovieModel();
-            movies.add(movie);
-        }
 
+        movieAdapter = new MovieAdapter(movies);
         recyclerView.setLayoutManager(new GridLayoutManager(this, 3));
-        recyclerView.setAdapter(new MovieAdapter(movies));
+        recyclerView.setAdapter(movieAdapter);
+
+        Bundle extras = getIntent().getExtras();
+
+        if (extras != null && extras.containsKey("id")) {
+            int id = extras.getInt("id");
+            if (id > 3 || id < 1){
+                id = 3;
+                Toast.makeText(this, "Devido a falta de dados no servidor o filme com o id 03 está sendo exibido", Toast.LENGTH_LONG).show();
+            }
+
+            MovieDetailTask movieDetailTask = new MovieDetailTask(this);
+            movieDetailTask.setMovieDetailLoader(this);
+            movieDetailTask.execute("https://tiagoaguiar.co/api/netflix/" + id);
+        }
     }
 
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if(item.getItemId() == android.R.id.home){
+            finish();
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    public void onResult(MovieDetailModel movieDetail) {
+        txtTitle.setText(movieDetail.getMovie().getTitle());
+        txtDesc.setText(movieDetail.getMovie().getDesc());
+        txtCast.setText(movieDetail.getMovie().getCast());
+        imgCover = findViewById(R.id.image_view_cover);
+
+
+        ImageTask imageTask = new ImageTask(imgCover);
+        imageTask.setShadowEnabled(true);
+        imageTask.execute(movieDetail.getMovie().getCoverUrl());
+
+        movieAdapter.setMovies(movieDetail.getMoviesSimiler());
+    }
 
     private static class MovieHolder extends RecyclerView.ViewHolder {
 
@@ -92,10 +122,16 @@ public class MovieActivity extends AppCompatActivity {
 
     private class MovieAdapter extends RecyclerView.Adapter<MovieHolder> {
 
-        private final List<MovieModel> movies;
+        private List<MovieModel> movies;
 
         private MovieAdapter(List<MovieModel> movies) {
             this.movies = movies;
+        }
+
+        public void setMovies(List<MovieModel> movies) {
+            this.movies.clear();
+            this.movies.addAll(movies);
+            this.notifyDataSetChanged();
         }
 
         @NonNull
@@ -108,7 +144,7 @@ public class MovieActivity extends AppCompatActivity {
         @Override
         public void onBindViewHolder(@NonNull @NotNull MovieHolder holder, int position) {
             MovieModel movie = movies.get(position);
-//            holder.imgViewCover.setImageResource(movie.getCoverUrl());
+            new ImageTask(holder.imgViewCover).execute(movie.getCoverUrl());
         }
 
         @Override
